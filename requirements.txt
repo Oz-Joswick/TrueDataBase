@@ -1,0 +1,35 @@
+# face_system/mac/requirements.txt
+# ───────────────────────────────────
+# Install with:
+#   pip install -r requirements.txt
+#
+# Recommended: use a virtual environment
+#   python3 -m venv venv
+#   source venv/bin/activate
+#   pip install -r requirements.txt
+# ─────────────────────────────────────
+
+# ── Face detection & embeddings ───────────────────────────────────────────────
+insightface>=0.7.3
+onnxruntime>=1.16.0         # CPU inference
+# onnxruntime-gpu>=1.16.0   # uncomment if using CUDA GPU
+# onnxruntime-silicon       # uncomment for Apple Silicon CoreML acceleration
+
+# ── Image & video processing ──────────────────────────────────────────────────
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# ── HTTP client (Pi API calls) ────────────────────────────────────────────────
+httpx>=0.26.0
+
+# ── Websocket server (dashboard bridge) ───────────────────────────────────────
+websockets>=12.0
+
+# ── Async runtime ─────────────────────────────────────────────────────────────
+# asyncio is part of the Python standard library — no install needed.
+# Listed here for documentation purposes only.
+# asyncio
+
+# ── Type hints (Python 3.9 backports) ─────────────────────────────────────────
+# Not needed on Python 3.10+
+# typing_extensions>=4.0.0

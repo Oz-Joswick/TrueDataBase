@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>face_system</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --surface2:  #1f2937;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #7d8590;
+    --green:     #3fb950;
+    --yellow:    #d29922;
+    --red:       #f85149;
+    --blue:      #58a6ff;
+    --purple:    #bc8cff;
+    --orange:    #e3b341;
+    --font:      'Segoe UI', system-ui, sans-serif;
+    --mono:      'Cascadia Code', 'Consolas', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────────── */
+  #topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 20px;
+    height: 52px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  #topbar .logo {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .sep { width: 1px; height: 24px; background: var(--border); }
+
+  #ws-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  #ws-dot.connected { background: var(--green); }
+  #ws-dot.connecting {
+    background: var(--yellow);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  #ws-label { color: var(--muted); font-size: 11px; }
+
+  #pi-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #pi-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  #pi-dot.online  { background: var(--green); }
+  #pi-dot.offline { background: var(--red); animation: pulse 2s infinite; }
+  #pi-dot.timeout { background: var(--yellow); }
+
+  .spacer { flex: 1; }
+
+  #btn-start {
+    background: var(--green);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s;
+    letter-spacing: 0.3px;
+  }
+  #btn-start:hover { opacity: 0.85; }
+  #btn-start.running {
+    background: var(--red);
+    color: #fff;
+  }
+  #btn-ping {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  #btn-ping:hover { color: var(--text); border-color: var(--blue); }
+
+  /* ── Warning banner ───────────────────────────────────────── */
+  #warn-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #warn-banner.show { display: flex; }
+  #warn-banner.offline { background: rgba(248,81,73,0.1);  border-bottom-color: rgba(248,81,73,0.3); }
+  #warn-banner.warning { background: rgba(210,153,34,0.1); border-bottom-color: rgba(210,153,34,0.3); }
+  #warn-banner.info    { background: rgba(88,166,255,0.1); border-bottom-color: rgba(88,166,255,0.3); }
+  #warn-banner .wb-icon { font-size: 14px; flex-shrink: 0; }
+  #warn-banner .wb-text { flex: 1; line-height: 1.4; }
+  #warn-banner .wb-dismiss {
+    flex-shrink: 0; color: var(--muted); cursor: pointer;
+    font-size: 18px; line-height: 1; padding: 0 2px;
+  }
+  #warn-banner .wb-dismiss:hover { color: var(--text); }
+
+  /* ── Stats bar ────────────────────────────────────────────── */
+  #statsbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 0;
+    padding: 0 20px;
+    flex-shrink: 0;
+  }
+  .stat {
+    padding: 10px 20px 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat:not(:last-child) {
+    margin-right: 20px;
+    border-right: 1px solid var(--border);
+    padding-right: 20px;
+  }
+  .stat-val {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--mono);
+    line-height: 1;
+  }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-val.green  { color: var(--green); }
+  .stat-val.yellow { color: var(--yellow); }
+  .stat-val.red    { color: var(--red); }
+  .stat-val.blue   { color: var(--blue); }
+
+  /* ── Main layout ──────────────────────────────────────────── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  #left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  #right {
+    width: 300px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* ── Section headers ──────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+  .section-header .spacer { flex: 1; }
+
+  /* ── Worker grid ──────────────────────────────────────────── */
+  #workers-wrap {
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #workers-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .worker-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.2s;
+  }
+  .worker-card.processing { border-color: var(--blue); }
+  .worker-card.dead       { border-color: var(--red); opacity: 0.6; }
+
+  .worker-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .worker-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .worker-dot.idle       { background: var(--muted); }
+  .worker-dot.processing { background: var(--blue); animation: pulse 1.5s infinite; }
+  .worker-dot.ready      { background: var(--green); }
+  .worker-dot.dead       { background: var(--red); }
+
+  .worker-name { font-weight: 600; font-size: 12px; }
+  .worker-pid  { font-size: 10px; color: var(--muted); font-family: var(--mono); margin-left: auto; }
+
+  .worker-job {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--mono);
+    min-height: 14px;
+  }
+  .worker-job.active { color: var(--text); }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  .worker-faces {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 20px;
+  }
+  .face-chip {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-family: var(--mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 170px;
+  }
+  .face-chip.known   { background: rgba(63,185,80,0.15);  color: var(--green); }
+  .face-chip.session { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .face-chip.new     { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .face-chip.unknown { background: rgba(125,133,144,0.15); color: var(--muted); }
+  .face-chip.error   { background: rgba(248,81,73,0.15);  color: var(--red); }
+
+  .worker-restarts {
+    font-size: 10px;
+    color: var(--yellow);
+  }
+
+  /* ── Tabs ─────────────────────────────────────────────────── */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .tab-btn {
+    padding: 9px 18px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  .tab-pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .tab-pane.active { display: flex; }
+
+  /* ── Queue ────────────────────────────────────────────────── */
+  #queue-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  #queue-add-row {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  #paths-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    outline: none;
+    resize: none;
+    height: 32px;
+    overflow: hidden;
+  }
+  #paths-input:focus { border-color: var(--blue); height: 72px; resize: vertical; overflow: auto; }
+  #paths-input::placeholder { color: var(--muted); }
+
+  .btn-small {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    align-self: flex-start;
+  }
+  .btn-small:hover { border-color: var(--blue); color: var(--blue); }
+  .btn-small.danger:hover { border-color: var(--red); color: var(--red); }
+
+  #queue-table-wrap {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:hover { background: var(--surface); }
+  tbody td {
+    padding: 7px 12px;
+    font-size: 12px;
+    vertical-align: middle;
+  }
+
+  .job-id { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+  .job-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .badge.img     { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .badge.vid     { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .badge.pending    { background: rgba(125,133,144,0.12); color: var(--muted); }
+  .badge.processing { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .badge.done       { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge.failed     { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge.skipped    { background: rgba(125,133,144,0.12); color: var(--muted); }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+    line-height: 1;
+    border-radius: 4px;
+  }
+  .remove-btn:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+
+  .empty-queue {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  /* ── Database browser ────────────────────────────────────── */
+  #db-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+  }
+  #db-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  #db-search {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 6px 10px;
+    outline: none;
+    font-family: var(--font);
+  }
+  #db-search:focus { border-color: var(--blue); }
+  #db-search::placeholder { color: var(--muted); }
+  #db-filter-review {
+    font-size: 11px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #db-filter-review.active { color: var(--yellow); border-color: var(--yellow); }
+
+  #db-cards { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+
+  .db-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.15s;
+  }
+  .db-card:hover { border-color: var(--muted); }
+  .db-card.needs-review { border-color: rgba(210,153,34,0.4); }
+
+  .db-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    color: var(--muted);
+    flex-shrink: 0;
+    font-family: var(--mono);
+  }
+
+  .db-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+  .db-name-row { display: flex; align-items: center; gap: 6px; }
+  .db-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .db-review-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(210,153,34,0.15);
+    color: var(--yellow);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .db-meta { display: flex; gap: 12px; font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+  .db-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .db-rename-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+  .db-rename-btn:hover { color: var(--blue); border-color: var(--blue); }
+
+  .db-rename-form { display: none; margin-top: 8px; display: flex; gap: 6px; }
+  .db-rename-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--blue);
+    border-radius: 5px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+    font-family: var(--font);
+  }
+  .db-rename-save {
+    background: var(--blue);
+    color: #000;
+    border: none;
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .db-rename-cancel {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 5px 8px;
+    cursor: pointer;
+  }
+
+  #db-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .page-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 5px 14px;
+    cursor: pointer;
+  }
+  .page-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+  .page-btn:disabled { opacity: 0.35; cursor: default; }
+  #db-page-info { font-size: 11px; color: var(--muted); font-family: var(--mono); min-width: 100px; text-align: center; }
+
+  #db-empty { text-align: center; padding: 40px; color: var(--muted); font-size: 12px; }
+
+  /* ── Right panel ──────────────────────────────────────────── */
+  .panel {
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-header {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+  }
+  .panel-header:hover { color: var(--text); }
+  .panel-chevron { transition: transform 0.2s; font-size: 10px; }
+  .panel.collapsed .panel-chevron { transform: rotate(-90deg); }
+  .panel.collapsed .panel-body { display: none; }
+  .panel-body { padding: 12px 16px; }
+
+  /* Pi panel */
+  .pi-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .pi-row:last-child { border-bottom: none; }
+  .pi-row .key { color: var(--muted); }
+  .pi-row .val { font-family: var(--mono); font-size: 11px; }
+
+  /* Settings panel */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { color: var(--text); }
+
+  /* Toggle switch */
+  .toggle {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .toggle-slider:before {
+    content: "";
+    position: absolute;
+    height: 12px; width: 12px;
+    left: 2px; bottom: 2px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--green); border-color: var(--green); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(16px); background: #000; }
+
+  /* People panel */
+  #people-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
+  .person-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    padding: 4px 6px;
+    border-radius: 6px;
+  }
+  .person-row:hover { background: var(--surface2); }
+  .person-avatar {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+  .person-name { font-family: var(--mono); color: var(--text); }
+  .person-emb  { margin-left: auto; font-size: 10px; color: var(--muted); }
+  .person-review { font-size: 9px; color: var(--yellow); margin-left: 4px; }
+
+  #people-empty { color: var(--muted); font-size: 11px; text-align: center; padding: 16px; }
+
+  /* ── Activity log ─────────────────────────────────────────── */
+  #log-panel {
+    flex-shrink: 0;
+  }
+  #log-body {
+    max-height: 120px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+  }
+  .log-entry { padding: 1px 0; }
+  .log-entry .ts { color: var(--border); margin-right: 6px; }
+  .log-entry.info .msg   { color: var(--muted); }
+  .log-entry.success .msg { color: var(--green); }
+  .log-entry.warn .msg    { color: var(--yellow); }
+  .log-entry.error .msg   { color: var(--red); }
+
+  /* ── Scrollbars ───────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── Toast ────────────────────────────────────────────────── */
+  #toast-container {
+    position: fixed; bottom: 20px; right: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 999;
+    pointer-events: none;
+  }
+  .toast {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text);
+    max-width: 280px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: auto;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--green); }
+  .toast.error   { border-color: var(--red); }
+  .toast.warn    { border-color: var(--yellow); }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────── -->
+<div id="topbar">
+  <span class="logo">face_system</span>
+  <div class="sep"></div>
+  <div id="ws-dot"></div>
+  <span id="ws-label">connecting...</span>
+  <div class="sep"></div>
+  <div id="pi-badge">
+    <div id="pi-dot"></div>
+    <span id="pi-text">Pi: —</span>
+  </div>
+  <div class="spacer"></div>
+  <a id="btn-scan" href="#" target="_blank"
+     style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);
+            border-radius:6px;padding:6px 12px;font-size:11px;text-decoration:none;
+            display:flex;align-items:center;gap:5px;opacity:0.4;pointer-events:none"
+     title="Open camera scan page">
+    &#128247; Scan
+  </a>
+  <button id="btn-ping" onclick="sendCmd({type:'ping_pi'})">Ping Pi</button>
+  <button id="btn-start" onclick="toggleRunning()">Start</button>
+</div>
+
+<!-- ── Warning banner ──────────────────────────────────────────── -->
+<div id="warn-banner">
+  <span class="wb-icon" id="wb-icon">&#9888;</span>
+  <span class="wb-text" id="wb-text"></span>
+  <span class="wb-dismiss" onclick="dismissBanner()">&#215;</span>
+</div>
+
+<!-- ── Stats bar ────────────────────────────────────────────────── -->
+<div id="statsbar">
+  <div class="stat">
+    <div class="stat-val" id="stat-total">0</div>
+    <div class="stat-label">Total Jobs</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="stat-pending">0</div>
+    <div class="stat-label">Pending</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val blue" id="stat-processing">0</div>
+    <div class="stat-label">Processing</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val green" id="stat-done">0</div>
+    <div class="stat-label">Done</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val red" id="stat-failed">0</div>
+    <div class="stat-label">Failed</div>
+  </div>
+  <div class="sep" style="margin:0 4px;height:32px;align-self:center"></div>
+  <div class="stat">
+    <div class="stat-val green" id="stat-db">—</div>
+    <div class="stat-label">People in DB</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="stat-ping">—</div>
+    <div class="stat-label">Pi Ping</div>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- LEFT -->
+  <div id="left">
+
+    <!-- Workers -->
+    <div id="workers-wrap">
+      <div class="section-header">
+        <span class="section-title">Workers</span>
+        <span id="workers-count" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="workers-grid">
+        <div style="color:var(--muted);font-size:12px;padding:16px">Waiting for workers...</div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-queue-btn" onclick="switchTab('queue')">Queue</button>
+      <button class="tab-btn" id="tab-db-btn" onclick="switchTab('db')">Database</button>
+    </div>
+
+    <!-- Queue tab -->
+    <div id="tab-queue" class="tab-pane active">
+      <div id="queue-wrap">
+        <div class="section-header">
+          <span class="section-title">Queue</span>
+          <div class="spacer"></div>
+          <button class="btn-small danger" onclick="sendCmd({type:'clear_queue'})">Clear Pending</button>
+        </div>
+
+        <!-- Add files row -->
+        <div id="queue-add-row">
+          <textarea id="paths-input" placeholder="Paste file or folder paths (one per line)..."></textarea>
+          <button class="btn-small" onclick="addFiles()">Add Files</button>
+        </div>
+
+        <div id="queue-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>File</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Worker</th>
+                <th>Faces</th>
+                <th>Duration</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="queue-tbody">
+              <tr><td colspan="8"><div class="empty-queue">No jobs yet. Add files above.</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Database tab -->
+    <div id="tab-db" class="tab-pane">
+      <div id="db-wrap">
+        <div id="db-toolbar">
+          <input id="db-search" type="text" placeholder="Search by name or ID..." oninput="dbSearchChanged()">
+          <button id="db-filter-review" onclick="dbToggleReview()" title="Show only needs-review">Review only</button>
+          <button class="btn-small" onclick="refreshPeople()" title="Reload from Pi">Refresh</button>
+        </div>
+        <div id="db-cards">
+          <div id="db-empty">People will appear here once Pi is online.</div>
+        </div>
+        <div id="db-pagination">
+          <button class="page-btn" id="db-prev" onclick="dbChangePage(-1)" disabled>← Prev</button>
+          <span id="db-page-info">— / —</span>
+          <button class="page-btn" id="db-next" onclick="dbChangePage(1)" disabled>Next →</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /left -->
+
+  <!-- RIGHT -->
+  <div id="right">
+
+    <!-- Pi status panel -->
+    <div class="panel" id="panel-pi">
+      <div class="panel-header" onclick="togglePanel('panel-pi')">
+        Pi Status <span class="panel-chevron">▾</span>
+      </div>
+      <div class="panel-body" id="pi-details">
+        <div class="pi-row"><span class="key">Status</span><span class="val" id="pi-status-val">—</span></div>
+        <div class="pi-row"><span class="key">API</span><span class="val" id="pi-api-val">—</span></div>
+        <div class="pi-row"><span class="key">Ping</span><span class="val" id="pi-ping-val">—</span></div>
+        <div class="pi-row"><span class="key">DB Rows</span><span class="val" id="pi-dbrows-val">—</span></div>
+        <div class="pi-row"><span class="key">Uptime</span><span class="val" id="pi-uptime-val">—</span></div>
+        <div class="pi-row"><span class="key">Version</span><span class="val" id="pi-version-val">—</span></div>
+        <div class="pi-row"><span class="key">Last check</span><span class="val" id="pi-ts-val">—</span></div>
+      </div>
+    </div>
+
+    <!-- Settings panel -->
+    <div class="panel" id="panel-settings">
+      <div class="panel-header" onclick="togglePanel('panel-settings')">
+        Settings <span class="panel-chevron">▾</span>
+      </div>
+      <div class="panel-body">
+        <div class="setting-row">
+          <span class="setting-label">Show Previews</span>
+          <label class="toggle">
+            <input type="checkbox" id="set-show_previews" onchange="saveSetting('show_previews',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Show Viz</span>
+          <label class="toggle">
+            <input type="checkbox" id="set-show_viz" onchange="saveSetting('show_viz',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Diversity Check</span>
+          <label class="toggle">
+            <input type="checkbox" id="set-diversity_check" onchange="saveSetting('diversity_check',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Auto-Register New</span>
+          <label class="toggle">
+            <input type="checkbox" id="set-auto_register" onchange="saveSetting('auto_register',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Delete After Scan</span>
+          <label class="toggle">
+            <input type="checkbox" id="set-delete_after" onchange="saveSetting('delete_after',this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- People panel -->
+    <div class="panel" id="panel-people">
+      <div class="panel-header" onclick="togglePanel('panel-people')">
+        People in DB <span id="people-count" style="font-size:10px;font-weight:400;color:var(--muted)"></span>
+        <span class="panel-chevron">▾</span>
+      </div>
+      <div class="panel-body">
+        <div id="people-list">
+          <div id="people-empty">No people loaded yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log panel -->
+    <div class="panel" id="panel-log">
+      <div class="panel-header" onclick="togglePanel('panel-log')">
+        Activity Log <span class="panel-chevron">▾</span>
+      </div>
+      <div class="panel-body" style="padding:8px 12px">
+        <div id="log-body"></div>
+      </div>
+    </div>
+
+  </div><!-- /right -->
+
+</div><!-- /main -->
+
+<div id="toast-container"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+const state = {
+  running: false,
+  workers: {},
+  jobs: [],
+  queue: {},
+  pi: {},
+  settings: {},
+  people: [],
+};
+
+// ── WebSocket ──────────────────────────────────────────────────
+let ws = null;
+let reconnectTimer = null;
+
+function connect() {
+  clearTimeout(reconnectTimer);
+  setWsDot('connecting');
+
+  ws = new WebSocket('ws://localhost:8765');
+
+  ws.onopen = () => {
+    setWsDot('connected');
+    log('Connected to dashboard server', 'success');
+    dismissBanner();   // clear any disconnection banner
+  };
+
+  ws.onclose = () => {
+    setWsDot('disconnected');
+    log('Disconnected — retrying in 3s...', 'warn');
+    showBanner('offline',
+      '&#9889;',
+      'Disconnected from dashboard server — attempting to reconnect...');
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => {
+    setWsDot('disconnected');
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handleMessage(msg);
+    } catch(err) {
+      console.error('Parse error', err);
+    }
+  };
+}
+
+function sendCmd(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(obj));
+  } else {
+    toast('Not connected to dashboard server', 'error');
+  }
+}
+
+// ── Message router ─────────────────────────────────────────────
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'snapshot':
+      applySnapshot(msg);
+      break;
+    case 'worker_state':
+      applyWorkerUpdate(msg.update);
+      if (msg.queue) applyQueueSummary(msg.queue);
+      if (msg.jobs)  applyJobs(msg.jobs);
+      break;
+    case 'queue_update':
+      if (msg.jobs)  applyJobs(msg.jobs);
+      if (msg.queue) applyQueueSummary(msg.queue);
+      if (msg.cleared !== undefined) toast(`Cleared ${msg.cleared} pending job(s)`, 'warn');
+      break;
+    case 'running_state':
+      state.running = msg.running;
+      updateStartBtn();
+      log(msg.running ? 'Processing started' : 'Processing stopped', msg.running ? 'success' : 'warn');
+      break;
+    case 'pi_status':
+      if (msg.pi) applyPiStatus(msg.pi);
+      if (msg.people) { applyPeople(msg.people); renderDbBrowser(); }
+      break;
+    case 'settings_update':
+      if (msg.settings) applySettings(msg.settings);
+      break;
+    case 'rename_result':
+      handleRenameResult(msg);
+      break;
+  }
+}
+
+function applySnapshot(msg) {
+  state.running = msg.running;
+  state.pi      = msg.pi      || {};
+  state.settings= msg.settings|| {};
+  state.people  = msg.people  || [];
+
+  if (msg.scan_url) {
+    const btn = document.getElementById('btn-scan');
+    btn.href = msg.scan_url;
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'auto';
+    btn.style.color = 'var(--text)';
+    btn.title = `Open scan page: ${msg.scan_url}`;
+  }
+
+  updateStartBtn();
+  applySettings(state.settings);
+  applyPiStatus(state.pi);
+  applyPeople(state.people);
+  renderDbBrowser();
+
+  if (msg.workers) {
+    msg.workers.forEach(w => { state.workers[w.worker_id] = w; });
+    renderWorkers();
+  }
+  if (msg.jobs)  applyJobs(msg.jobs);
+  if (msg.queue) applyQueueSummary(msg.queue);
+
+  log('Snapshot received', 'info');
+}
+
+// ── Workers ────────────────────────────────────────────────────
+function applyWorkerUpdate(u) {
+  if (!u || u.worker_id == null) return;
+  const wid = u.worker_id;
+
+  if (!state.workers[wid]) state.workers[wid] = {};
+  Object.assign(state.workers[wid], u);
+
+  renderWorkerCard(wid);
+  updateWorkersCount();
+
+  if (u.type === 'job_done') {
+    const faces = u.result && u.result.faces_found ? u.result.faces_found : 0;
+    log(`Worker ${wid} done: ${u.filename} — ${faces} face(s)`, 'success');
+  } else if (u.type === 'job_failed') {
+    log(`Worker ${wid} FAILED: ${u.filename} — ${u.error || ''}`, 'error');
+  } else if (u.type === 'worker_dead') {
+    log(`Worker ${wid} died after ${u.restarts} restart(s)`, 'error');
+  }
+}
+
+function renderWorkers() {
+  Object.keys(state.workers).forEach(wid => renderWorkerCard(parseInt(wid)));
+  updateWorkersCount();
+}
+
+function renderWorkerCard(wid) {
+  const w = state.workers[wid];
+  if (!w) return;
+
+  const grid = document.getElementById('workers-grid');
+  let card = document.getElementById(`wcard-${wid}`);
+
+  if (!card) {
+    // Remove placeholder
+    const placeholder = grid.querySelector('div');
+    if (placeholder && placeholder.style.color) placeholder.remove();
+
+    card = document.createElement('div');
+    card.className = 'worker-card';
+    card.id = `wcard-${wid}`;
+    grid.appendChild(card);
+  }
+
+  const status     = w.status || w.type || 'idle';
+  const isProc     = status === 'processing' || w.type === 'frame' || w.type === 'job_start';
+  const isDead     = w.type === 'worker_dead';
+  const dotClass   = isDead ? 'dead' : isProc ? 'processing' : (status === 'idle' ? 'idle' : 'ready');
+  const cardClass  = isDead ? 'dead' : isProc ? 'processing' : '';
+  const filename   = w.filename || '';
+  const progress   = w.progress || 0;
+  const faces      = w.faces || [];
+  const restarts   = w.restart_count || w.restarts || 0;
+
+  const faceChips = faces.map(f => {
+    const t = f.type || 'unknown';
+    const label = f.label || '?';
+    return `<span class="face-chip ${t}" title="${f.type}">${label}</span>`;
+  }).join('');
+
+  card.className = `worker-card ${cardClass}`;
+  card.innerHTML = `
+    <div class="worker-head">
+      <div class="worker-dot ${dotClass}"></div>
+      <span class="worker-name">Worker ${wid}</span>
+      ${w.pid ? `<span class="worker-pid">${w.pid}</span>` : ''}
+    </div>
+    <div class="worker-job ${filename ? 'active' : ''}">${filename || (isDead ? 'DEAD' : 'idle')}</div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${isProc ? progress : 0}%"></div></div>
+    <div class="worker-faces">${faceChips || (isProc ? '<span style="color:var(--muted);font-size:10px">detecting...</span>' : '')}</div>
+    ${restarts > 0 ? `<div class="worker-restarts">↺ ${restarts} restart(s)</div>` : ''}
+  `;
+}
+
+function updateWorkersCount() {
+  const total  = Object.keys(state.workers).length;
+  const active = Object.values(state.workers).filter(w =>
+    w.status === 'processing' || w.type === 'frame' || w.type === 'job_start'
+  ).length;
+  const el = document.getElementById('workers-count');
+  if (el) el.textContent = `${active}/${total} active`;
+}
+
+// ── Queue ──────────────────────────────────────────────────────
+function applyJobs(jobs) {
+  state.jobs = jobs;
+  renderQueue();
+}
+
+function applyQueueSummary(q) {
+  state.queue = q;
+  document.getElementById('stat-total').textContent      = q.total      || 0;
+  document.getElementById('stat-pending').textContent    = q.pending    || 0;
+  document.getElementById('stat-processing').textContent = q.processing || 0;
+  document.getElementById('stat-done').textContent       = q.done       || 0;
+  document.getElementById('stat-failed').textContent     = q.failed     || 0;
+}
+
+function renderQueue() {
+  const tbody = document.getElementById('queue-tbody');
+  if (!state.jobs || state.jobs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-queue">No jobs yet. Add files above.</div></td></tr>';
+    return;
+  }
+
+  const rows = state.jobs.map(j => {
+    const ft        = j.file_type === 'video' ? 'vid' : 'img';
+    const st        = j.status || 'pending';
+    const dur       = j.duration != null ? `${j.duration}s` : '—';
+    const faces     = j.faces_found != null ? j.faces_found : '—';
+    const worker    = j.worker_id  != null ? `W${j.worker_id}` : '—';
+    const removable = st === 'pending';
+    const errTitle  = j.error ? ` title="${escHtml(j.error)}"` : '';
+
+    return `<tr>
+      <td class="job-id">${j.id}</td>
+      <td><div class="job-name" title="${escHtml(j.path || j.filename)}">${escHtml(j.filename)}</div></td>
+      <td><span class="badge ${ft}">${ft}</span></td>
+      <td><span class="badge ${st}"${errTitle}>${st}</span></td>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:11px">${worker}</td>
+      <td style="font-family:var(--mono);font-size:11px">${faces}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${dur}</td>
+      <td>${removable ? `<button class="remove-btn" onclick="removeJob(${j.id})" title="Remove">×</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = rows;
+}
+
+function addFiles() {
+  const raw   = document.getElementById('paths-input').value.trim();
+  if (!raw) return;
+  const paths = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  sendCmd({ type: 'add_files', paths });
+  document.getElementById('paths-input').value = '';
+  log(`Queued ${paths.length} path(s)`, 'info');
+}
+
+function removeJob(id) {
+  sendCmd({ type: 'remove_job', job_id: id });
+}
+
+// Enter key in textarea adds files
+document.getElementById('paths-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    addFiles();
+  }
+});
+
+// ── Pi ─────────────────────────────────────────────────────────
+let _lastPiStatus = null;
+
+function applyPiStatus(pi) {
+  state.pi = pi;
+  const dot     = document.getElementById('pi-dot');
+  const piText  = document.getElementById('pi-text');
+  const status  = pi.status || 'unknown';
+
+  // Banner logic: show on change, dismiss when recovered
+  if (status !== _lastPiStatus) {
+    if (status === 'offline') {
+      showBanner('offline', '&#128683;',
+        'Pi is offline — face identification is unavailable until it reconnects.');
+    } else if (status === 'timeout') {
+      showBanner('warning', '&#9202;',
+        'Pi is not responding (timeout) — identification may be slow or unavailable.');
+    } else if (status === 'error') {
+      showBanner('warning', '&#9888;',
+        `Pi returned an error: ${pi.api || 'unknown'}. Identification may be affected.`);
+    } else if (status === 'online' && _lastPiStatus && _lastPiStatus !== 'online') {
+      dismissBanner();   // Pi came back, clear the warning
+      log('Pi reconnected', 'success');
+    }
+    _lastPiStatus = status;
+  }
+
+  // Extra warning: Pi is online but DB is empty
+  if (status === 'online' && pi.db_rows === 0) {
+    showBanner('warning', '&#128203;',
+      'Database is empty — no people are registered yet. Add people before scanning.');
+  }
+
+  dot.className = `${status === 'online' ? 'online' : status === 'offline' ? 'offline' : 'timeout'}`;
+  piText.textContent = `Pi: ${status}${pi.ping_ms != null ? ` ${pi.ping_ms}ms` : ''}`;
+
+  document.getElementById('pi-status-val').textContent  = status;
+  document.getElementById('pi-api-val').textContent     = pi.api     || '—';
+  document.getElementById('pi-ping-val').textContent    = pi.ping_ms != null ? `${pi.ping_ms} ms` : '—';
+  document.getElementById('pi-dbrows-val').textContent  = pi.db_rows != null ? pi.db_rows : '—';
+  document.getElementById('pi-uptime-val').textContent  = pi.uptime  || '—';
+  document.getElementById('pi-version-val').textContent = pi.version || '—';
+  document.getElementById('pi-ts-val').textContent      = pi.ts ? fmtTime(pi.ts) : '—';
+
+  document.getElementById('stat-db').textContent        = pi.db_rows != null ? pi.db_rows : '—';
+  document.getElementById('stat-ping').textContent      = pi.ping_ms != null ? `${pi.ping_ms}ms` : '—';
+}
+
+// ── Settings ───────────────────────────────────────────────────
+function applySettings(settings) {
+  state.settings = settings;
+  for (const [key, val] of Object.entries(settings)) {
+    const el = document.getElementById(`set-${key}`);
+    if (el) el.checked = !!val;
+  }
+}
+
+function saveSetting(key, value) {
+  sendCmd({ type: 'settings', key, value });
+}
+
+// ── People ─────────────────────────────────────────────────────
+function applyPeople(people) {
+  state.people = people || [];
+  const list  = document.getElementById('people-list');
+  const count = document.getElementById('people-count');
+
+  count.textContent = state.people.length ? `(${state.people.length})` : '';
+
+  if (!state.people.length) {
+    list.innerHTML = '<div id="people-empty">No people in DB.</div>';
+    return;
+  }
+
+  list.innerHTML = state.people.map(p => {
+    const initials = (p.name || '?').substring(0, 2).toUpperCase();
+    const review   = p.needs_review ? '<span class="person-review">review</span>' : '';
+    const embs     = p.embedding_count != null ? `${p.embedding_count} emb` : '';
+    return `<div class="person-row">
+      <div class="person-avatar">${initials}</div>
+      <span class="person-name">${escHtml(p.name || 'Unknown')}</span>
+      ${review}
+      <span class="person-emb">${embs}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── UI helpers ─────────────────────────────────────────────────
+function toggleRunning() {
+  const cmd = state.running ? 'stop' : 'start';
+  sendCmd({ type: cmd });
+}
+
+function updateStartBtn() {
+  const btn = document.getElementById('btn-start');
+  btn.textContent = state.running ? 'Stop' : 'Start';
+  btn.className   = `btn-start${state.running ? ' running' : ''}`;
+  document.getElementById('btn-start').id = 'btn-start';
+}
+
+function setWsDot(status) {
+  const dot   = document.getElementById('ws-dot');
+  const label = document.getElementById('ws-label');
+  dot.className = status === 'connected' ? 'connected' : status === 'connecting' ? 'connecting' : '';
+  label.textContent = status === 'connected' ? 'connected' : status === 'connecting' ? 'connecting...' : 'disconnected';
+}
+
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+// ── Log ────────────────────────────────────────────────────────
+const MAX_LOG = 80;
+const logEntries = [];
+
+function log(msg, level = 'info') {
+  const entry = { msg, level, ts: new Date() };
+  logEntries.unshift(entry);
+  if (logEntries.length > MAX_LOG) logEntries.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const el = document.getElementById('log-body');
+  el.innerHTML = logEntries.map(e =>
+    `<div class="log-entry ${e.level}">
+      <span class="ts">${fmtTime(e.ts)}</span>
+      <span class="msg">${escHtml(e.msg)}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+function toast(msg, level = 'info') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${level}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => el.classList.add('show'));
+  });
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 3000);
+}
+
+// ── Utilities ──────────────────────────────────────────────────
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtTime(ts) {
+  try {
+    const d = typeof ts === 'string' ? new Date(ts) : ts;
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch { return '—'; }
+}
+
+// ── Warning banner ─────────────────────────────────────────────
+let _bannerDismissed = false;
+
+function showBanner(level, icon, text) {
+  _bannerDismissed = false;
+  const banner = document.getElementById('warn-banner');
+  banner.className = `show ${level}`;
+  document.getElementById('wb-icon').innerHTML = icon;
+  document.getElementById('wb-text').textContent = text;
+}
+
+function dismissBanner() {
+  _bannerDismissed = true;
+  document.getElementById('warn-banner').className = '';
+}
+
+// ── Tab switcher ───────────────────────────────────────────────
+function switchTab(name) {
+  ['queue', 'db'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === name);
+    document.getElementById(`tab-${t}-btn`).classList.toggle('active', t === name);
+  });
+  if (name === 'db') renderDbBrowser();
+}
+
+// ── Database browser ───────────────────────────────────────────
+const DB_PAGE_SIZE = 5;
+let dbPage        = 0;
+let dbFilterReview = false;
+let dbSearchTerm   = '';
+let dbRenamingId   = null;
+
+function dbFilteredPeople() {
+  let list = state.people || [];
+  if (dbFilterReview) list = list.filter(p => p.metadata && p.metadata.needs_review);
+  if (dbSearchTerm) {
+    const q = dbSearchTerm.toLowerCase();
+    list = list.filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      String(p.id).includes(q)
+    );
+  }
+  return list;
+}
+
+function dbSearchChanged() {
+  dbSearchTerm = document.getElementById('db-search').value.trim();
+  dbPage = 0;
+  renderDbBrowser();
+}
+
+function dbToggleReview() {
+  dbFilterReview = !dbFilterReview;
+  const btn = document.getElementById('db-filter-review');
+  btn.classList.toggle('active', dbFilterReview);
+  dbPage = 0;
+  renderDbBrowser();
+}
+
+function dbChangePage(dir) {
+  const filtered   = dbFilteredPeople();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / DB_PAGE_SIZE));
+  dbPage = Math.max(0, Math.min(dbPage + dir, totalPages - 1));
+  renderDbBrowser();
+}
+
+function renderDbBrowser() {
+  const filtered   = dbFilteredPeople();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / DB_PAGE_SIZE));
+  dbPage = Math.min(dbPage, totalPages - 1);
+
+  const pageItems  = filtered.slice(dbPage * DB_PAGE_SIZE, (dbPage + 1) * DB_PAGE_SIZE);
+  const container  = document.getElementById('db-cards');
+  const emptyEl    = document.getElementById('db-empty');
+
+  document.getElementById('db-page-info').textContent =
+    filtered.length === 0 ? '0 results' : `Page ${dbPage + 1} / ${totalPages}  (${filtered.length} total)`;
+  document.getElementById('db-prev').disabled = dbPage <= 0;
+  document.getElementById('db-next').disabled = dbPage >= totalPages - 1;
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div id="db-empty">' +
+      (state.people && state.people.length ? 'No matches.' : 'People will appear here once Pi is online.') +
+      '</div>';
+    return;
+  }
+
+  container.innerHTML = pageItems.map(p => renderDbCard(p)).join('');
+
+  // Re-attach rename listeners
+  pageItems.forEach(p => {
+    const form   = document.getElementById(`rename-form-${p.id}`);
+    const input  = document.getElementById(`rename-input-${p.id}`);
+    if (form && input) {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitRename(p.id);
+        if (e.key === 'Escape') cancelRename(p.id);
+      });
+    }
+  });
+}
+
+function renderDbCard(p) {
+  const initials   = (p.name || '?').substring(0, 2).toUpperCase();
+  const review     = p.metadata && p.metadata.needs_review;
+  const created    = p.created_at ? fmtDate(p.created_at) : '—';
+  const embs       = p.embedding_count != null ? p.embedding_count : '?';
+
+  return `<div class="db-card${review ? ' needs-review' : ''}" id="dbcard-${p.id}">
+    <div class="db-avatar">${escHtml(initials)}</div>
+    <div class="db-info">
+      <div class="db-name-row">
+        <span class="db-name" id="dbname-${p.id}">${escHtml(p.name)}</span>
+        ${review ? '<span class="db-review-badge">needs review</span>' : ''}
+      </div>
+      <div class="db-meta">
+        <span>ID&nbsp;${p.id}</span>
+        <span>${embs}&nbsp;emb</span>
+        <span>${created}</span>
+      </div>
+      <div id="rename-form-${p.id}" style="display:none;margin-top:8px;display:none;gap:6px;align-items:center">
+        <input class="db-rename-input" id="rename-input-${p.id}" type="text" value="${escHtml(p.name)}" placeholder="New name...">
+        <button class="db-rename-save" onclick="submitRename(${p.id})">Save</button>
+        <button class="db-rename-cancel" onclick="cancelRename(${p.id})">Cancel</button>
+      </div>
+    </div>
+    <div class="db-actions">
+      <button class="db-rename-btn" id="rename-btn-${p.id}" onclick="startRename(${p.id})" title="Rename">Rename</button>
+    </div>
+  </div>`;
+}
+
+function startRename(id) {
+  // Cancel any other open rename
+  if (dbRenamingId !== null && dbRenamingId !== id) cancelRename(dbRenamingId);
+  dbRenamingId = id;
+  const form = document.getElementById(`rename-form-${id}`);
+  const btn  = document.getElementById(`rename-btn-${id}`);
+  if (form) { form.style.display = 'flex'; }
+  if (btn)  { btn.style.display  = 'none'; }
+  const input = document.getElementById(`rename-input-${id}`);
+  if (input)  { input.focus(); input.select(); }
+}
+
+function cancelRename(id) {
+  const form = document.getElementById(`rename-form-${id}`);
+  const btn  = document.getElementById(`rename-btn-${id}`);
+  if (form) form.style.display = 'none';
+  if (btn)  btn.style.display  = '';
+  dbRenamingId = null;
+}
+
+function submitRename(id) {
+  const input = document.getElementById(`rename-input-${id}`);
+  const name  = input ? input.value.trim() : '';
+  if (!name) { toast('Name cannot be empty', 'error'); return; }
+  sendCmd({ type: 'rename_person', person_id: id, name });
+  // Optimistically update the displayed name
+  const nameEl = document.getElementById(`dbname-${id}`);
+  if (nameEl) nameEl.textContent = name;
+  cancelRename(id);
+  log(`Renamed person ${id} → "${name}"`, 'info');
+}
+
+function refreshPeople() {
+  sendCmd({ type: 'ping_pi' });
+  log('Refreshing people from Pi...', 'info');
+}
+
+// Handle rename result from server
+function handleRenameResult(msg) {
+  if (msg.ok) {
+    toast(`Renamed to "${msg.name}"`, 'success');
+    log(`Person ${msg.person_id} renamed to "${msg.name}"`, 'success');
+  } else {
+    toast(`Rename failed: ${msg.error}`, 'error');
+    log(`Rename failed: ${msg.error}`, 'error');
+    renderDbBrowser(); // revert optimistic update
+  }
+}
+
+// ── Utilities ──────────────────────────────────────────────────
+function fmtDate(ts) {
+  try {
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch { return '—'; }
+}
+
+// ── Init ───────────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>
