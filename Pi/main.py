@@ -21,11 +21,24 @@ import time
 from datetime import datetime
 from typing import Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import database as db
+
+
+# ── Lifecycle ─────────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.init_pool()
+    print("[api] database pool ready")
+    yield
+    await db.close_pool()
+    print("[api] database pool closed")
 
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -34,6 +47,7 @@ app = FastAPI(
     title="face_system Pi API",
     version="1.0.0",
     description="Face recognition database server.",
+    lifespan=lifespan,
 )
 
 # Allow the Mac (any local origin) to call the API.
@@ -47,20 +61,6 @@ app.add_middleware(
 
 # Record startup time for uptime reporting
 _started_at = time.monotonic()
-
-
-# ── Lifecycle ─────────────────────────────────────────────────────────────────
-
-@app.on_event("startup")
-async def startup():
-    await db.init_pool()
-    print("[api] database pool ready")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await db.close_pool()
-    print("[api] database pool closed")
 
 
 # ── Request / response models ─────────────────────────────────────────────────
