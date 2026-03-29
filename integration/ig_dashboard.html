@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Instagram → TrueDataBase</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:     #0f1117;
+  --panel:  #1a1d27;
+  --border: #2a2d3e;
+  --text:   #e0e0e0;
+  --muted:  #7a7f9a;
+  --accent: #5b7fff;
+  --green:  #3dcc8b;
+  --yellow: #f0c040;
+  --red:    #e05555;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Topbar ── */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#topbar h1 { font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+#session-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+  max-width: 260px;
+  flex: 1;
+  min-width: 120px;
+}
+#session-select option { background: var(--bg); }
+
+.topbar-gap { flex: 1; }
+
+.badge {
+  padding: 2px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  white-space: nowrap;
+}
+.badge.green { background: var(--green); color: #000; }
+
+/* ── Scrape form bar ── */
+#scrape-form {
+  display: none;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#scrape-form label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+#scrape-username {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+  width: 180px;
+}
+#scrape-count {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+  width: 70px;
+}
+
+/* ── Status bar ── */
+#status-bar {
+  padding: 5px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+#scan-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#scan-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s, background 0.3s;
+}
+
+/* ── Layout ── */
+#layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Left: post list ── */
+#post-list {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+#list-header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#list-header input[type=text] {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  color: var(--text);
+  font-size: 12px;
+}
+#list-header label {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.post-item {
+  display: flex;
+  gap: 10px;
+  padding: 9px 10px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.post-item:hover { background: rgba(91,127,255,0.07); }
+.post-item.active { background: rgba(91,127,255,0.15); border-left-color: var(--accent); }
+
+.post-thumb {
+  width: 50px; height: 50px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.post-meta { flex: 1; min-width: 0; }
+.post-shortcode { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.post-caption {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.mentions { display: flex; flex-wrap: wrap; gap: 3px; }
+.mention-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(91,127,255,0.2);
+  color: var(--accent);
+}
+.face-badges { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+.face-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--border);
+  color: var(--muted);
+}
+.face-count-badge.ok  { background: rgba(91,127,255,0.2); color: var(--accent); }
+.face-count-badge.bad { background: rgba(224,85,85,0.15); color: var(--red); opacity: 0.6; }
+
+/* ── Right: detail view ── */
+#detail { display: flex; flex-direction: column; overflow: hidden; }
+
+#carousel-bar {
+  display: flex;
+  gap: 6px;
+  padding: 7px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.carousel-thumb {
+  width: 42px; height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.5;
+  border: 2px solid transparent;
+  transition: opacity 0.15s;
+}
+.carousel-thumb.active { opacity: 1; border-color: var(--accent); }
+
+#image-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #08090f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+#face-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+#click-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; }
+
+#face-legend {
+  padding: 4px 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+#face-panel {
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  flex-shrink: 0;
+  min-height: 130px;
+}
+#face-panel-empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
+#selected-face-ui { display: none; }
+#selected-face-ui h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+
+.face-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.face-form input[type=text] {
+  padding: 6px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  min-width: 160px;
+}
+.face-form select {
+  padding: 6px 9px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  min-width: 190px;
+}
+
+.btn {
+  padding: 6px 13px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:hover { opacity: 0.85; }
+.btn-new  { background: var(--accent); color: #fff; }
+.btn-add  { background: var(--green);  color: #000; }
+.btn-skip { background: var(--border); color: var(--muted); }
+
+.registered-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(61,204,139,0.15);
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#mentions-row {
+  margin-top: 9px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#mentions-row span { color: var(--muted); font-size: 11px; }
+.mention-chip {
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: rgba(91,127,255,0.15);
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid rgba(91,127,255,0.3);
+}
+.mention-chip:hover { background: rgba(91,127,255,0.3); }
+
+#empty-detail {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  bottom: 16px; right: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 999;
+}
+#toast.show { opacity: 1; }
+#toast.ok  { border-color: var(--green); }
+#toast.err { border-color: var(--red); }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div id="topbar">
+  <h1>Instagram → TrueDataBase</h1>
+  <select id="session-select" onchange="switchSession(this.value)">
+    <option value="">— no sessions —</option>
+  </select>
+  <button class="btn btn-new" onclick="toggleScrapeForm()" style="padding:4px 10px;font-size:11px;">+ New Scrape</button>
+  <div class="topbar-gap"></div>
+  <span id="topbar-info" class="badge" style="background:var(--border);color:var(--muted);">loading…</span>
+  <span id="pi-badge"    class="badge" style="background:var(--border);color:var(--muted);">Pi …</span>
+</div>
+
+<!-- New scrape form -->
+<div id="scrape-form">
+  <label>Account:</label>
+  <input id="scrape-username" type="text" placeholder="username (no @)" autocomplete="off">
+  <label>Posts:</label>
+  <input id="scrape-count" type="number" value="100" min="1" max="2000">
+  <label style="gap:5px;">
+    <input type="checkbox" id="scrape-mentions-only"> mentions only
+  </label>
+  <button class="btn btn-new"  onclick="startScrape()">Start</button>
+  <button class="btn btn-skip" onclick="toggleScrapeForm()">Cancel</button>
+</div>
+
+<!-- Status bar (face scan / scrape progress) -->
+<div id="status-bar">
+  <span id="scan-label">Ready</span>
+  <div id="scan-track"><div id="scan-fill"></div></div>
+  <span id="scan-count"></span>
+</div>
+
+<!-- Layout -->
+<div id="layout">
+
+  <!-- Post list -->
+  <div id="post-list">
+    <div id="list-header">
+      <input type="text" id="search-input" placeholder="Filter by @mention or caption…" oninput="filterPosts()">
+      <label title="Only show images with 1–8 faces">
+        <input type="checkbox" id="filter-faces" checked onchange="filterPosts()"> 1–8 faces
+      </label>
+    </div>
+    <div id="list-body">
+      <div style="padding:20px;color:var(--muted);text-align:center;">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Detail -->
+  <div id="detail">
+    <div id="empty-detail">← Select a post to review faces</div>
+
+    <div id="carousel-bar" style="display:none;"></div>
+
+    <div id="image-wrap" style="display:none;">
+      <img id="main-image" src="" alt="" onload="onImageLoad()">
+      <canvas id="face-canvas"></canvas>
+      <div id="click-overlay" onclick="onCanvasClick(event)"></div>
+    </div>
+
+    <div id="face-legend" style="display:none;">
+      <div class="legend-item"><div class="legend-dot" style="background:#3dcc8b;"></div>Registered</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#58a6ff;"></div>Pi match ≥70%</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#bc8cff;"></div>Pi match 50–70%</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#5b7fff;"></div>No match yet</div>
+    </div>
+
+    <div id="face-panel" style="display:none;">
+      <div id="face-panel-empty">Click a face in the image to identify them.</div>
+      <div id="selected-face-ui">
+        <h3 id="face-title">Face 1</h3>
+        <div class="face-form" id="face-form-inner"></div>
+        <div id="mentions-row" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  posts:            [],
+  filteredPosts:    [],
+  currentPost:      null,
+  currentImagePath: null,
+  currentFaces:     [],
+  selectedFaceIdx:  null,
+  piPeople:         [],
+};
+
+const FACE_MIN = 1;
+const FACE_MAX = 8;
+
+function imageIsValid(img) {
+  const fc = img.face_count;
+  if (fc === null) return true;
+  return fc >= FACE_MIN && fc <= FACE_MAX;
+}
+function postHasValidImages(post) { return post.images.some(imageIsValid); }
+function validImagesForPost(post) { return post.images.filter(imageIsValid); }
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const r = await fetch(path, {
+    method,
+    headers: {'Content-Type': 'application/json'},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = '', 3000);
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+async function loadSessions() {
+  try {
+    const sessions = await api('GET', '/api/sessions');
+    const sel = document.getElementById('session-select');
+    if (sessions.length === 0) {
+      sel.innerHTML = '<option value="">— no sessions yet —</option>';
+      return;
+    }
+    sel.innerHTML = sessions.map(s =>
+      `<option value="${esc(s.path)}" ${s.active ? 'selected' : ''}>${esc(s.name)}</option>`
+    ).join('');
+  } catch(e) { /* ignore */ }
+}
+
+async function switchSession(path) {
+  if (!path) return;
+  try {
+    await api('POST', '/api/session', { path });
+    // Reset UI
+    S.posts = []; S.filteredPosts = []; S.currentPost = null;
+    S.currentImagePath = null; S.currentFaces = [];
+    renderList();
+    document.getElementById('empty-detail').style.display = 'flex';
+    document.getElementById('image-wrap').style.display = 'none';
+    document.getElementById('face-panel').style.display = 'none';
+    document.getElementById('carousel-bar').style.display = 'none';
+    document.getElementById('scan-fill').style.cssText = 'width:0%;background:var(--accent)';
+    document.getElementById('scan-count').textContent = '';
+    document.getElementById('scan-label').textContent = 'Scanning faces…';
+    _lastScanDone = -1;
+    await loadPosts();
+  } catch(e) {
+    toast('Failed to switch session: ' + e.message, 'err');
+  }
+}
+
+// ── Scrape form ───────────────────────────────────────────────────────────────
+function toggleScrapeForm() {
+  const f = document.getElementById('scrape-form');
+  f.style.display = f.style.display === 'flex' ? 'none' : 'flex';
+  if (f.style.display === 'flex') document.getElementById('scrape-username').focus();
+}
+
+async function startScrape() {
+  const username = document.getElementById('scrape-username').value.trim().replace(/^@/, '');
+  const count    = parseInt(document.getElementById('scrape-count').value) || 100;
+  const mentionsOnly = document.getElementById('scrape-mentions-only').checked;
+  if (!username) { toast('Enter a username', 'err'); return; }
+  try {
+    await api('POST', '/api/scrape', { username, count, mentions_only: mentionsOnly });
+    document.getElementById('scrape-form').style.display = 'none';
+    document.getElementById('scan-label').textContent = `Starting scrape for @${username}…`;
+    toast(`Scraping @${username} — ${count} posts`, 'ok');
+    _lastScrapeWasRunning = false;
+  } catch(e) {
+    toast('Failed to start scrape: ' + e.message, 'err');
+  }
+}
+
+// ── Unified status polling ────────────────────────────────────────────────────
+let _lastScanDone          = -1;
+let _lastScrapeWasRunning  = false;
+
+async function pollStatus() {
+  try {
+    const [scan, scrape] = await Promise.all([
+      api('GET', '/api/scan_status'),
+      api('GET', '/api/scrape/status'),
+    ]);
+
+    if (scrape.running) {
+      _lastScrapeWasRunning = true;
+      const last = scrape.lines?.slice(-1)[0] || `Scraping @${scrape.username}…`;
+      document.getElementById('scan-label').textContent = last;
+      document.getElementById('scan-fill').style.cssText = 'width:100%;background:var(--yellow)';
+      document.getElementById('scan-count').textContent = `@${scrape.username}`;
+      await loadPosts();
+      return;
+    }
+
+    // Scrape just finished
+    if (_lastScrapeWasRunning && !scrape.running) {
+      _lastScrapeWasRunning = false;
+      if (scrape.returncode === 0) {
+        toast('Scrape complete! Switched to new session.', 'ok');
+        await loadSessions();
+        await loadPosts();
+      } else {
+        toast(`Scrape failed (exit ${scrape.returncode})`, 'err');
+        document.getElementById('scan-label').textContent = 'Scrape failed';
+        document.getElementById('scan-fill').style.background = 'var(--red)';
+        return;
+      }
+    }
+
+    // Face scan progress
+    const pct = scan.total > 0 ? (scan.done / scan.total * 100) : 0;
+    const done = scan.done === scan.total && scan.total > 0;
+    document.getElementById('scan-fill').style.cssText =
+      `width:${pct}%;background:${done ? 'var(--green)' : 'var(--accent)'}`;
+    document.getElementById('scan-count').textContent =
+      scan.total > 0 ? `${scan.done} / ${scan.total}` : '';
+    document.getElementById('scan-label').textContent =
+      scan.running ? 'Scanning faces…' : (done ? 'Scan complete' : 'Ready');
+
+    if (scan.done !== _lastScanDone) {
+      _lastScanDone = scan.done;
+      await loadPosts();
+    }
+  } catch(e) { /* ignore network errors */ }
+}
+
+// ── Load posts ────────────────────────────────────────────────────────────────
+async function loadPosts() {
+  try {
+    S.posts = await api('GET', '/api/posts');
+    filterPosts();
+    const shown = S.filteredPosts.length;
+    const total = S.posts.length;
+    const info  = document.getElementById('topbar-info');
+    info.textContent = total === 0
+      ? 'no posts'
+      : shown === total ? `${total} posts` : `${shown} / ${total} posts`;
+    info.style.background = total > 0 ? 'var(--accent)' : 'var(--border)';
+    info.style.color = total > 0 ? '#fff' : 'var(--muted)';
+  } catch(e) {
+    document.getElementById('topbar-info').textContent = 'error';
+    toast('Failed to load posts: ' + e.message, 'err');
+  }
+}
+
+async function loadPiPeople() {
+  try {
+    S.piPeople = await api('GET', '/api/pi/people');
+    const status = await api('GET', '/api/pi/status');
+    const badge  = document.getElementById('pi-badge');
+    badge.textContent = `Pi: ${status.total_people} people`;
+    badge.style.background = 'var(--green)';
+    badge.style.color = '#000';
+  } catch {
+    document.getElementById('pi-badge').textContent = 'Pi offline';
+  }
+}
+
+// ── Render post list ──────────────────────────────────────────────────────────
+function renderList() {
+  const body = document.getElementById('list-body');
+  body.innerHTML = '';
+
+  if (!S.filteredPosts.length) {
+    body.innerHTML = '<div style="padding:20px;color:var(--muted);text-align:center;">No posts</div>';
+    return;
+  }
+
+  S.filteredPosts.forEach(post => {
+    const item = document.createElement('div');
+    item.className = 'post-item' + (S.currentPost?.shortcode === post.shortcode ? ' active' : '');
+    item.onclick = () => selectPost(post);
+
+    const validImgs = validImagesForPost(post);
+    const thumbImg  = validImgs[0] || post.images[0];
+    const thumbSrc  = thumbImg ? `/img?path=${encodeURIComponent(thumbImg.path)}` : '';
+
+    const faceBadges = validImgs.map(img => {
+      const fc  = img.face_count;
+      const cls = fc === null ? '' : (fc >= FACE_MIN && fc <= FACE_MAX ? 'ok' : 'bad');
+      const lbl = fc === null ? '?' : `${fc} \u{1F464}`;
+      return `<span class="face-count-badge ${cls}">${lbl}</span>`;
+    }).join('');
+
+    const mentionHtml = post.mentions.slice(0, 4).map(m =>
+      `<span class="mention-tag">@${esc(m)}</span>`
+    ).join('');
+
+    item.innerHTML = `
+      ${thumbSrc
+        ? `<img class="post-thumb" src="${thumbSrc}" onerror="this.style.display='none'">`
+        : `<div class="post-thumb"></div>`}
+      <div class="post-meta">
+        <div class="post-shortcode">${esc(post.shortcode)}</div>
+        <div class="post-caption">${esc(post.caption.slice(0, 60))}</div>
+        <div class="mentions">${mentionHtml}</div>
+        ${faceBadges ? `<div class="face-badges">${faceBadges}</div>` : ''}
+      </div>`;
+    body.appendChild(item);
+  });
+}
+
+function filterPosts() {
+  const q          = document.getElementById('search-input').value.toLowerCase();
+  const faceFilter = document.getElementById('filter-faces').checked;
+
+  S.filteredPosts = S.posts.filter(p => {
+    if (faceFilter && !postHasValidImages(p)) return false;
+    if (!q) return true;
+    return p.caption.toLowerCase().includes(q) ||
+           p.mentions.some(m => m.toLowerCase().includes(q)) ||
+           p.shortcode.toLowerCase().includes(q);
+  });
+  renderList();
+}
+
+// ── Select post ───────────────────────────────────────────────────────────────
+async function selectPost(post) {
+  S.currentPost    = post;
+  S.selectedFaceIdx = null;
+  renderList();
+
+  document.getElementById('empty-detail').style.display      = 'none';
+  document.getElementById('image-wrap').style.display        = 'flex';
+  document.getElementById('face-legend').style.display       = 'flex';
+  document.getElementById('face-panel').style.display        = 'block';
+  document.getElementById('face-panel-empty').style.display  = 'block';
+  document.getElementById('selected-face-ui').style.display  = 'none';
+
+  const faceFilter = document.getElementById('filter-faces').checked;
+  const visibleImgs  = faceFilter ? validImagesForPost(post) : post.images;
+  const visiblePaths = visibleImgs.map(img => img.path);
+
+  const carBar = document.getElementById('carousel-bar');
+  if (visiblePaths.length > 1) {
+    carBar.style.display = 'flex';
+    carBar.innerHTML = visiblePaths.map((p, i) =>
+      `<img class="carousel-thumb ${i===0?'active':''}"
+            src="/img?path=${encodeURIComponent(p)}"
+            onclick="selectImage('${esc(p)}', this)"
+            onerror="this.style.display='none'">`
+    ).join('');
+  } else {
+    carBar.style.display = 'none';
+  }
+
+  if (visiblePaths.length > 0) await selectImage(visiblePaths[0], null);
+}
+
+async function selectImage(imgPath, thumbEl) {
+  S.currentImagePath = imgPath;
+  S.currentFaces     = [];
+  S.selectedFaceIdx  = null;
+
+  document.querySelectorAll('.carousel-thumb').forEach(t => t.classList.remove('active'));
+  if (thumbEl) thumbEl.classList.add('active');
+
+  document.getElementById('main-image').src = `/img?path=${encodeURIComponent(imgPath)}`;
+
+  try {
+    S.currentFaces = await api('GET',
+      `/api/posts/${S.currentPost.shortcode}/faces?image_path=${encodeURIComponent(imgPath)}`);
+    drawFaces();
+    resetFacePanel();
+  } catch(e) {
+    toast('Face detection failed: ' + e.message, 'err');
+    return;
+  }
+
+  // Background: ask Pi to identify all detected faces
+  autoIdentifyFaces(imgPath);
+}
+
+async function autoIdentifyFaces(imgPath) {
+  try {
+    const results = await api('POST', '/api/identify_faces', { image_path: imgPath });
+    let updated = false;
+    for (const r of results) {
+      const face = S.currentFaces.find(f => f.index === r.face_index);
+      if (face && r.pi_match !== undefined) {
+        face.pi_match = r.pi_match;
+        updated = true;
+      }
+    }
+    if (!updated) return;
+    drawFaces();
+    // Refresh open panel if a face is selected
+    if (S.selectedFaceIdx !== null) {
+      const face = S.currentFaces[S.selectedFaceIdx];
+      if (face && !face.registered_to) showFacePanel(face, S.selectedFaceIdx);
+    }
+  } catch(e) { /* Pi offline — silently skip */ }
+}
+
+// ── Canvas ────────────────────────────────────────────────────────────────────
+function onImageLoad() { drawFaces(); }
+
+function drawFaces() {
+  const img    = document.getElementById('main-image');
+  const canvas = document.getElementById('face-canvas');
+  const wrap   = document.getElementById('image-wrap');
+  const rect   = img.getBoundingClientRect();
+  const wRect  = wrap.getBoundingClientRect();
+
+  canvas.width  = rect.width;
+  canvas.height = rect.height;
+  canvas.style.cssText = `width:${rect.width}px;height:${rect.height}px;`
+    + `left:${rect.left - wRect.left}px;top:${rect.top - wRect.top}px;`;
+
+  const ctx    = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const scaleX = rect.width  / img.naturalWidth;
+  const scaleY = rect.height / img.naturalHeight;
+
+  S.currentFaces.forEach((face, i) => {
+    const [x1, y1, x2, y2] = face.bbox;
+    const x = x1 * scaleX, y = y1 * scaleY;
+    const w = (x2 - x1) * scaleX, h = (y2 - y1) * scaleY;
+
+    const isSelected   = i === S.selectedFaceIdx;
+    const isRegistered = !!face.registered_to;
+    const pm           = face.pi_match;
+
+    // Colour hierarchy:
+    //   green  = already registered in this session
+    //   yellow = currently selected
+    //   blue   = Pi confident match (≥ 70 %)
+    //   purple = Pi low-confidence match (< 70 %)
+    //   grey   = no match / not yet identified
+    let color;
+    if      (isRegistered)                          color = '#3dcc8b';
+    else if (isSelected)                            color = '#f0c040';
+    else if (pm && pm.confidence >= 0.70)           color = '#58a6ff';
+    else if (pm && pm.confidence >= 0.50)           color = '#bc8cff';
+    else                                            color = '#5b7fff';
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = isSelected ? 3 : 2;
+    ctx.strokeRect(x, y, w, h);
+
+    // Label: registered name > Pi match name+confidence > fallback
+    let label;
+    if      (face.registered_name)   label = face.registered_name;
+    else if (pm)                      label = `${pm.name} ${Math.round(pm.confidence * 100)}%`;
+    else if (isSelected)              label = '▶ click to assign';
+    else                              label = `face ${i + 1}`;
+
+    ctx.font = 'bold 12px sans-serif';
+    const tw = ctx.measureText(label).width;
+    const ly = y > 18 ? y - 4 : y + h + 14;
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 1, ly - 13, tw + 8, 16);
+    ctx.fillStyle = (isRegistered || (!isSelected && pm)) ? '#000' : '#fff';
+    ctx.fillText(label, x + 3, ly - 1);
+  });
+}
+
+function onCanvasClick(e) {
+  const img   = document.getElementById('main-image');
+  const rect  = img.getBoundingClientRect();
+  const mx    = (e.clientX - rect.left) / rect.width  * img.naturalWidth;
+  const my    = (e.clientY - rect.top)  / rect.height * img.naturalHeight;
+
+  const hit = S.currentFaces.findIndex(f => {
+    const [x1, y1, x2, y2] = f.bbox;
+    return mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+  });
+
+  if (hit >= 0) {
+    S.selectedFaceIdx = hit;
+    drawFaces();
+    showFacePanel(S.currentFaces[hit], hit);
+  } else {
+    S.selectedFaceIdx = null;
+    drawFaces();
+    resetFacePanel();
+  }
+}
+
+window.addEventListener('resize', () => { if (S.currentFaces.length) drawFaces(); });
+
+// ── Face panel ────────────────────────────────────────────────────────────────
+function resetFacePanel() {
+  document.getElementById('face-panel-empty').style.display = 'block';
+  document.getElementById('selected-face-ui').style.display = 'none';
+}
+
+// ── Smart name / person suggestions ──────────────────────────────────────────
+
+function fuzzyMatchPerson(rawName) {
+  // Find a Pi person whose name loosely matches rawName (strips leading @)
+  const n = rawName.toLowerCase().replace(/^@/, '').trim();
+  if (!n) return null;
+  return (
+    S.piPeople.find(p => p.name.toLowerCase() === n) ||
+    S.piPeople.find(p => p.name.toLowerCase().includes(n)) ||
+    S.piPeople.find(p => n.includes(p.name.toLowerCase()))
+  ) || null;
+}
+
+function computeSuggestion(face) {
+  // Returns { name, personId, source } — the best guess for this face.
+  const mentions          = S.currentPost?.mentions || [];
+  const unregisteredFaces = S.currentFaces.filter(f => !f.registered_to);
+  const pm                = face.pi_match;
+
+  // 1. Pi match with decent confidence
+  if (pm && pm.confidence >= 0.60) {
+    // Check if any caption tag also points to same person (double-confirmation)
+    const tagMatch = mentions.find(m =>
+      m.toLowerCase() === pm.name.toLowerCase() ||
+      pm.name.toLowerCase().includes(m.toLowerCase())
+    );
+    return {
+      name:       pm.name,
+      personId:   pm.person_id,
+      confidence: pm.confidence,
+      source:     tagMatch ? 'pi+tag' : 'pi',
+    };
+  }
+
+  // 2. Single unregistered face + single caption tag → obvious assignment
+  if (unregisteredFaces.length === 1 && mentions.length === 1) {
+    const piPerson = fuzzyMatchPerson(mentions[0]);
+    return {
+      name:     mentions[0],
+      personId: piPerson?.id || null,
+      source:   piPerson ? 'tag+db' : 'tag',
+    };
+  }
+
+  // 3. One caption tag + weak Pi match name overlaps the tag
+  if (mentions.length === 1 && pm) {
+    const piPerson = fuzzyMatchPerson(mentions[0]);
+    return {
+      name:     mentions[0],
+      personId: piPerson?.id || null,
+      source:   'tag',
+    };
+  }
+
+  return null;
+}
+
+function showFacePanel(face, idx) {
+  document.getElementById('face-panel-empty').style.display = 'none';
+  const ui = document.getElementById('selected-face-ui');
+  ui.style.display = 'block';
+
+  document.getElementById('face-title').textContent =
+    `Face ${idx + 1}  ·  det ${face.det_score.toFixed(2)}`;
+
+  const inner    = document.getElementById('face-form-inner');
+  const mentions = S.currentPost?.mentions || [];
+
+  // ── Already registered ────────────────────────────────────────────────────
+  if (face.registered_to) {
+    inner.innerHTML = `
+      <div class="registered-label">
+        ✓ Registered as <strong style="margin-left:4px;">${esc(face.registered_name)}</strong>
+      </div>
+      <button class="btn btn-skip" onclick="unselect()">Dismiss</button>`;
+    document.getElementById('mentions-row').style.display = 'none';
+    return;
+  }
+
+  // ── Compute best suggestion ───────────────────────────────────────────────
+  const suggestion = computeSuggestion(face);
+  const pm         = face.pi_match;
+
+  // Build Pi match banner
+  let piBanner = '';
+  if (pm) {
+    const pct   = Math.round(pm.confidence * 100);
+    const level = pm.confidence >= 0.80 ? 'high' : pm.confidence >= 0.60 ? 'mid' : 'low';
+    const colour = { high: '#3dcc8b', mid: '#58a6ff', low: '#bc8cff' }[level];
+    const confirmBtn = `onclick="applyPiMatch(${idx}, ${pm.person_id}, '${esc(pm.name)}')"`;
+    piBanner = `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;
+                  border-radius:6px;border:1px solid ${colour}33;
+                  background:${colour}18;margin-bottom:6px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--muted);">Pi match:</span>
+        <strong style="color:${colour};font-size:12px;">${esc(pm.name)}</strong>
+        <span style="font-size:10px;color:var(--muted);">${pct}%</span>
+        <button class="btn btn-add" style="padding:3px 10px;font-size:11px;" ${confirmBtn}>
+          Confirm
+        </button>
+        <button class="btn btn-skip" style="padding:3px 8px;font-size:11px;"
+                onclick="dismissPiMatch(${idx})">Override</button>
+      </div>`;
+  }
+
+  // Build people dropdown (pre-select suggestion if known)
+  const opts = S.piPeople.map(p => {
+    const sel = (suggestion?.personId === p.id) ? 'selected' : '';
+    return `<option value="${p.id}" ${sel}>${esc(p.name)} (${p.embedding_count})</option>`;
+  }).join('');
+
+  // Pre-fill name input from suggestion
+  const prefill = suggestion ? esc(suggestion.name.replace(/^@/, '')) : '';
+  const tipText  = suggestion
+    ? `<span style="font-size:10px;color:var(--muted);">
+        ${{ 'pi+tag': '✓ Pi & caption agree', 'pi': '↑ from Pi match',
+            'tag+db': '↑ from caption tag (in DB)', 'tag': '↑ from caption tag' }[suggestion.source]}
+       </span>`
+    : '';
+
+  inner.innerHTML = `
+    ${piBanner}
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="name-input" placeholder="Person's name…"
+               value="${prefill}" style="flex:1;min-width:140px;">
+        ${tipText}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <select id="person-select" style="flex:1;min-width:180px;">
+          <option value="">— add to existing person —</option>
+          ${opts}
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-new"  onclick="registerFace(${idx}, false)">Register new</button>
+        <button class="btn btn-add"  onclick="registerFace(${idx}, true)">Add to existing</button>
+        <button class="btn btn-skip" onclick="unselect()">Skip</button>
+      </div>
+    </div>`;
+
+  // ── Caption tags ──────────────────────────────────────────────────────────
+  const mentionsRow = document.getElementById('mentions-row');
+  if (mentions.length) {
+    // Highlight tags that match the Pi suggestion or are in the DB
+    const tagChips = mentions.map(m => {
+      const inDb   = fuzzyMatchPerson(m);
+      const isPiMatch = pm && (
+        pm.name.toLowerCase() === m.toLowerCase() ||
+        pm.name.toLowerCase().includes(m.toLowerCase())
+      );
+      const style = isPiMatch
+        ? 'background:rgba(61,204,139,0.2);border-color:rgba(61,204,139,0.5);color:#3dcc8b;'
+        : inDb
+          ? 'background:rgba(88,166,255,0.15);border-color:rgba(88,166,255,0.4);color:#58a6ff;'
+          : '';
+      const title = isPiMatch ? 'Matches Pi recognition'
+                  : inDb      ? `In database as "${inDb.name}"` : '';
+      return `<span class="mention-chip" style="${style}"
+                    title="${title}"
+                    onclick="fillNameFromTag('${esc(m)}')">@${esc(m)}</span>`;
+    }).join('');
+    mentionsRow.style.display = 'flex';
+    mentionsRow.innerHTML = '<span>Tagged in post:</span>' + tagChips;
+  } else {
+    mentionsRow.style.display = 'none';
+  }
+
+  // ── Multi-face / multi-tag hint ───────────────────────────────────────────
+  const unregistered = S.currentFaces.filter(f => !f.registered_to);
+  if (unregistered.length > 1 && mentions.length > 1) {
+    // Show count hint above the input
+    const hint = inner.querySelector('div');
+    if (hint) {
+      const bar = document.createElement('div');
+      bar.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:4px;';
+      bar.textContent =
+        `${unregistered.length} unregistered faces · ${mentions.length} caption tags — assign each face below`;
+      inner.insertBefore(bar, hint);
+    }
+  }
+}
+
+// ── One-click Pi confirmation ─────────────────────────────────────────────────
+
+async function applyPiMatch(faceIdx, personId, personName) {
+  // Add this face's embedding to the matched person without asking
+  try {
+    const result = await api('POST', '/api/register', {
+      image_path: S.currentImagePath,
+      face_index: faceIdx,
+      name:       personName,
+      person_id:  personId,
+    });
+    toast(`✓ Added to ${personName} (Pi ID ${result.person_id})`, 'ok');
+    S.currentFaces[faceIdx].registered_to   = result.person_id;
+    S.currentFaces[faceIdx].registered_name = personName;
+    S.piPeople = await api('GET', '/api/pi/people');
+    loadPiPeople();
+    drawFaces();
+    showFacePanel(S.currentFaces[faceIdx], faceIdx);
+    renderList();
+  } catch(e) {
+    toast('Registration failed: ' + e.message, 'err');
+  }
+}
+
+function dismissPiMatch(faceIdx) {
+  // User wants to override — clear the Pi match so the normal form shows
+  if (S.currentFaces[faceIdx]) {
+    S.currentFaces[faceIdx].pi_match = null;
+    drawFaces();
+    showFacePanel(S.currentFaces[faceIdx], faceIdx);
+  }
+}
+
+function fillNameFromTag(mention) {
+  const name      = mention.replace(/^@/, '');
+  const inp       = document.getElementById('name-input');
+  const sel       = document.getElementById('person-select');
+  if (inp) inp.value = name;
+  // Also pre-select the matching person in dropdown if found
+  const piPerson  = fuzzyMatchPerson(mention);
+  if (sel && piPerson) sel.value = String(piPerson.id);
+}
+
+function unselect() {
+  S.selectedFaceIdx = null;
+  drawFaces();
+  resetFacePanel();
+}
+
+async function registerFace(faceIdx, addToExisting) {
+  const nameInput   = document.getElementById('name-input');
+  const personSelect = document.getElementById('person-select');
+  const name        = nameInput?.value.trim();
+  const personId    = personSelect?.value ? parseInt(personSelect.value) : null;
+
+  if (addToExisting && !personId) { toast('Select an existing person first', 'err'); return; }
+  if (!addToExisting && !name)    { toast('Enter a name for the new person', 'err'); return; }
+
+  const resolvedName = addToExisting
+    ? (S.piPeople.find(p => p.id === personId)?.name || name) : name;
+
+  try {
+    const result = await api('POST', '/api/register', {
+      image_path: S.currentImagePath,
+      face_index: faceIdx,
+      name:       resolvedName,
+      person_id:  addToExisting ? personId : null,
+    });
+    toast(`✓ ${resolvedName} registered (Pi ID ${result.person_id})`, 'ok');
+    S.currentFaces[faceIdx].registered_to   = result.person_id;
+    S.currentFaces[faceIdx].registered_name = resolvedName;
+    S.piPeople = await api('GET', '/api/pi/people');
+    loadPiPeople();
+    drawFaces();
+    showFacePanel(S.currentFaces[faceIdx], faceIdx);
+    renderList();
+  } catch(e) {
+    toast('Registration failed: ' + e.message, 'err');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async () => {
+  await Promise.all([loadSessions(), loadPosts(), loadPiPeople()]);
+  setInterval(pollStatus, 2000);
+  await pollStatus();
+})();
+</script>
+</body>
+</html>

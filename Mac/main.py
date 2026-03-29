@@ -10,10 +10,14 @@ Entry point. Responsibilities:
   6. Stay alive, forwarding shutdown signals to children
 """
 
+import functools
+import http.server
 import multiprocessing
 import os
+import subprocess
 import sys
 import signal
+import threading
 import time
 import webbrowser
 from pathlib import Path
@@ -21,13 +25,19 @@ from pathlib import Path
 # ── local imports ─────────────────────────────────────────────────────────────
 from config import (
     DASHBOARD_PORT,
+    DASHBOARD_HTTP_PORT,
     SCAN_SERVER_PORT,
+    IG_SERVER_PORT,
+    PI_URL,
     WORKER_CORES_OVERRIDE,   # set to int in config.py to skip the prompt
 )
 from worker_pool import WorkerPool
 from dashboard_server import run_dashboard_server
 from detector import init_worker_model
 from scan_server import run_scan_server, _local_ip
+
+_IG_SERVER_SCRIPT = Path(__file__).parent.parent / "integration" / "ig_server.py"
+_IG_ROOT          = Path(__file__).parent.parent / "integration" / "ig_output"
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -72,13 +82,29 @@ def prompt_core_count(detected: int) -> int:
     return chosen
 
 
+def _run_html_server(port: int, directory: Path):
+    """Serve the Mac/ directory over plain HTTP so iframes to localhost work."""
+    class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass  # suppress per-request logs
+
+    handler = functools.partial(_QuietHandler, directory=str(directory))
+    with http.server.HTTPServer(("localhost", port), handler) as httpd:
+        httpd.serve_forever()
+
+
 def open_dashboard():
-    """Open dashboard.html in the user's default browser."""
-    html_path = Path(__file__).parent / "dashboard.html"
-    if html_path.exists():
-        webbrowser.open(html_path.as_uri())
-    else:
-        print(f"  [warn] dashboard.html not found at {html_path}")
+    """Start a tiny HTTP file-server, then open dashboard.html via HTTP."""
+    mac_dir = Path(__file__).parent
+    threading.Thread(
+        target=_run_html_server,
+        args=(DASHBOARD_HTTP_PORT, mac_dir),
+        daemon=True,
+    ).start()
+    time.sleep(0.3)   # let the server bind
+    url = f"http://localhost:{DASHBOARD_HTTP_PORT}/dashboard.html"
+    webbrowser.open(url)
+    print(f"  [html]       serving Mac/ at http://localhost:{DASHBOARD_HTTP_PORT}/")
 
 
 # ── process targets ───────────────────────────────────────────────────────────
@@ -145,6 +171,21 @@ def main():
     print(f"  [scan]       PID {scan_proc.pid} "
           f"— https://{_local_ip()}:{SCAN_SERVER_PORT}")
 
+    # ── 3c. Spawn Instagram review server ────────────────────────────────────
+    _IG_ROOT.mkdir(parents=True, exist_ok=True)
+    ig_proc = subprocess.Popen(
+        [
+            sys.executable, str(_IG_SERVER_SCRIPT),
+            "--root",  str(_IG_ROOT),
+            "--pi",    PI_URL,
+            "--port",  str(IG_SERVER_PORT),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    print(f"  [instagram]  PID {ig_proc.pid} "
+          f"— http://localhost:{IG_SERVER_PORT}")
+
     # Give the websocket server a moment to bind before the browser opens
     time.sleep(0.8)
 
@@ -176,6 +217,7 @@ def main():
         pool.shutdown()
         dashboard_proc.terminate()
         dashboard_proc.join(timeout=3)
+        ig_proc.terminate()
         sys.exit(0)
 
     signal.signal(signal.SIGINT,  _shutdown)
@@ -204,6 +246,19 @@ def main():
                 daemon=True,
             )
             scan_proc.start()
+
+        if ig_proc.poll() is not None:
+            print("  [warn] Instagram server died — restarting...")
+            ig_proc = subprocess.Popen(
+                [
+                    sys.executable, str(_IG_SERVER_SCRIPT),
+                    "--root",  str(_IG_ROOT),
+                    "--pi",    PI_URL,
+                    "--port",  str(IG_SERVER_PORT),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
         pool.health_check()
 

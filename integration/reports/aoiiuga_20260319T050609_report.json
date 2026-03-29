@@ -1,0 +1,16 @@
+{
+  "username": "aoiiuga",
+  "catalog_scraped_at": "20260319T044925",
+  "pipeline_run_at": "20260319T050609",
+  "posts_processed": 5,
+  "faces_detected": 7,
+  "faces_identified": 0,
+  "source_identifications": 0,
+  "conflicts_generated": 0,
+  "detection_errors": [
+    {
+      "shortcode": "DVtf1CDEROD",
+      "error": "Event loop is closed"
+    }
+  ]
+}

@@ -187,6 +187,11 @@
     min-height: 0;
   }
 
+  #ig-wrap {
+    flex: 1;
+    min-height: 0;
+  }
+
   #left {
     flex: 1;
     display: flex;
@@ -818,6 +823,14 @@
      title="Open camera scan page">
     &#128247; Scan
   </a>
+  <button id="btn-instagram"
+          onclick="toggleInstagram()"
+          style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);
+                 border-radius:6px;padding:6px 12px;font-size:11px;cursor:pointer;
+                 display:flex;align-items:center;gap:5px;"
+          title="Open Instagram review panel">
+    &#128499; Instagram
+  </button>
   <button id="btn-ping" onclick="sendCmd({type:'ping_pi'})">Ping Pi</button>
   <button id="btn-start" onclick="toggleRunning()">Start</button>
 </div>
@@ -1291,7 +1304,7 @@ function renderQueue() {
 function addFiles() {
   const raw   = document.getElementById('paths-input').value.trim();
   if (!raw) return;
-  const paths = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  const paths = raw.split('\n').map(s => s.trim().replace(/\\ /g, ' ')).filter(Boolean);
   sendCmd({ type: 'add_files', paths });
   document.getElementById('paths-input').value = '';
   log(`Queued ${paths.length} path(s)`, 'info');
@@ -1659,8 +1672,47 @@ function fmtDate(ts) {
   } catch { return '—'; }
 }
 
+// ── Instagram panel toggle ──────────────────────────────────────
+let _igMode   = false;
+let _igLoaded = false;
+
+function toggleInstagram() {
+  _igMode = !_igMode;
+
+  // Panels that belong to the main view
+  document.getElementById('warn-banner').style.display = _igMode ? 'none' : '';
+  document.getElementById('statsbar').style.display    = _igMode ? 'none' : '';
+  document.getElementById('main').style.display        = _igMode ? 'none' : '';
+
+  // Instagram frame
+  document.getElementById('ig-wrap').style.display = _igMode ? 'flex' : 'none';
+
+  // Load the iframe the first time it's shown (lazy, using a flag not frame.src)
+  if (_igMode && !_igLoaded) {
+    _igLoaded = true;
+    document.getElementById('ig-frame').src = 'http://localhost:8767';
+  }
+
+  // Button highlight
+  const btn = document.getElementById('btn-instagram');
+  btn.style.background = _igMode ? 'var(--purple)' : 'var(--surface2)';
+  btn.style.color      = _igMode ? '#fff'          : 'var(--muted)';
+  btn.style.border     = _igMode ? '1px solid var(--purple)' : '1px solid var(--border)';
+}
+
 // ── Init ───────────────────────────────────────────────────────
 connect();
 </script>
+
+<!-- Instagram iframe panel (hidden until btn-instagram is clicked) -->
+<div id="ig-wrap"
+     style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+  <iframe id="ig-frame"
+          src=""
+          style="flex:1;width:100%;height:100%;border:none;"
+          allow="camera">
+  </iframe>
+</div>
+
 </body>
 </html>

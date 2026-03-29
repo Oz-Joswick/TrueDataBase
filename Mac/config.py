@@ -87,6 +87,12 @@ INSIGHTFACE_PROVIDERS = ["CPUExecutionProvider"]
 SCAN_SERVER_PORT = 8766         # HTTPS port for the camera scan page
 SCAN_SERVER_HOST = "0.0.0.0"   # bind to all interfaces so LAN devices can reach it
 
+# ── Instagram integration ─────────────────────────────────────────────────────
+
+IG_SERVER_PORT   = 8767         # HTTP port for the Instagram review dashboard
+DASHBOARD_HTTP_PORT = 8769      # plain HTTP port that serves dashboard.html
+                                 # (avoids file:// → http:// iframe restrictions)
+
 # ── UI defaults ───────────────────────────────────────────────────────────────
 
 SHOW_PREVIEWS_DEFAULT = True    # worker preview cards visible on launch
